@@ -30,16 +30,22 @@ def parse_args():
     return parser.parse_args()
 
 
-def main(rank, world_size, num_epochs, amp_policy):
+def main(rank, world_size, num_epochs, amp_policy, amp_ratio, amp_policy_list):
     torch.manual_seed(SEED)
     model = RandModel()
     dataloader = get_rand_dataloader()
 
     trainer = Trainer(
-        model, rank, world_size, amp_policy=amp_policy, base_logdir="runs"
+        model,
+        rank,
+        world_size,
+        amp_policy_list=amp_policy_list,
+        base_logdir="runs",
+        log_dir_suffix=f"epochs_{num_epochs}_policy_{amp_policy}_ratio_{amp_ratio}",
+        num_epochs=num_epochs,
     )
     trainer.init_profiler()
-    trainer.fit(dataloader, num_epochs)
+    trainer.fit(dataloader)
 
 
 if __name__ == "__main__":
@@ -47,13 +53,15 @@ if __name__ == "__main__":
     print(globals())
 
     torch.manual_seed(SEED)
-    amp_policy = get_amp_policy(args.num_epochs, args.amp_ratio, args.amp_policy)
+    amp_policy_list = get_amp_policy(args.num_epochs, args.amp_ratio, args.amp_policy)
     mp.spawn(
         main,
         args=(
             args.world_size,
             args.num_epochs,
-            amp_policy,
+            args.amp_policy,
+            args.amp_ratio,
+            amp_policy_list,
         ),
         nprocs=args.world_size,
         join=True,

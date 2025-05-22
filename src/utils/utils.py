@@ -26,7 +26,7 @@ def destroy_distributed():
         dist.destroy_process_group()
 
 
-def get_log_dir_name(base_dir="runs"):
+def get_log_dir_name(base_dir="runs", log_dir_suffix=None):
     """Get a log dir name for current run. Avoid overwriting logs from previous runs."""
     os.makedirs(base_dir, exist_ok=True)
     existing = [
@@ -36,9 +36,10 @@ def get_log_dir_name(base_dir="runs"):
     ]
     run_ids = [int(d[len("run_") :]) for d in existing]
     next_id = max(run_ids, default=-1) + 1
-    return os.path.join(base_dir, f"run_{next_id}", "tensorbaord"), os.path.join(
-        base_dir, f"run_{next_id}", "profile"
-    )
+    base_name = "run" if log_dir_suffix is None else os.path.join("run", log_dir_suffix)
+    return os.path.join(
+        base_dir, f"{base_name}_{next_id}", "tensorbaord"
+    ), os.path.join(base_dir, f"{base_name}_{next_id}", "profile")
 
 
 def get_amp_policy(
