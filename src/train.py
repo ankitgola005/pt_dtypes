@@ -43,6 +43,7 @@ def main(rank, world_size, num_epochs, amp_policy, amp_ratio, amp_policy_list):
         base_logdir="runs",
         log_dir_suffix=f"epochs_{num_epochs}_policy_{amp_policy}_ratio_{amp_ratio}",
         num_epochs=num_epochs,
+        print_freq=1000,
     )
     trainer.init_profiler()
     trainer.fit(dataloader, accuracy=True)

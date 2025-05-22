@@ -54,7 +54,9 @@ class Trainer:
         schedule = (
             schedule
             if schedule is not None
-            else torch.profiler.schedule(wait=3, warmup=3, active=3, repeat=0)
+            else torch.profiler.schedule(
+                skip_first=20, wait=20, warmup=10, active=3, repeat=0
+            )
         )
         self.profiler_context = torch.profiler.profile(
             activities=[
@@ -126,8 +128,10 @@ class Trainer:
             log = f"Epoch {epoch}: Loss = {loss:.6f}"
             if accuracy:
                 log += f", Accuracy = {acc:.6f}%"
-            if epoch % self.print_freq == 0:
+            if epoch % self.print_freq == 0 or epoch == self.num_epochs:
                 rank_zero_print(self.rank, log)
+            if epoch == 0:
+                self.profiler_enabled = False
 
         if self.world_size > 1:
             destroy_distributed()
