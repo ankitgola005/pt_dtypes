@@ -3,7 +3,13 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-from utils.utils import DEVICE, get_log_dir_name, setup_distributed, destroy_distributed
+from utils.utils import (
+    DEVICE,
+    get_log_dir_name,
+    setup_distributed,
+    destroy_distributed,
+    rank_zero_print,
+)
 
 
 class Trainer:
@@ -20,6 +26,7 @@ class Trainer:
         amp_policy_list=None,
         base_logdir=".",
         log_dir_suffix=None,
+        print_freq=100,
     ):
         self.device = device
         self.rank = rank
@@ -37,6 +44,7 @@ class Trainer:
         )
         self.writer = SummaryWriter(log_dir=self.logdir) if self.rank == 0 else None
         self.world_size = world_size
+        self.print_freq = print_freq
 
     def init_profiler(self, schedule=None, profiler_dir=None):
         self.profiler_enabled = True
@@ -111,14 +119,15 @@ class Trainer:
             self.model = DDP(self.model)
         self.optimizer = self.optimizer(self.model.parameters(), self.lr)
 
-        print("starting fit")
+        rank_zero_print(self.rank, "Starting fit")
         for epoch in range(self.num_epochs):
             amp_enabled = self.amp_policy_list[epoch]
             loss, acc = self.train_epoch(dataloader, epoch, accuracy, amp_enabled)
-            log = f"Epoch {epoch+1}: Loss = {loss:.4f}"
+            log = f"Epoch {epoch}: Loss = {loss:.6f}"
             if accuracy:
-                log += f", Accuracy = {acc:.2f}%"
-            print(log)
+                log += f", Accuracy = {acc:.6f}%"
+            if epoch % self.print_freq == 0:
+                rank_zero_print(self.rank, log)
 
         if self.world_size > 1:
             destroy_distributed()

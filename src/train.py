@@ -45,7 +45,7 @@ def main(rank, world_size, num_epochs, amp_policy, amp_ratio, amp_policy_list):
         num_epochs=num_epochs,
     )
     trainer.init_profiler()
-    trainer.fit(dataloader)
+    trainer.fit(dataloader, accuracy=True)
 
 
 if __name__ == "__main__":

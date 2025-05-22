@@ -6,6 +6,11 @@ SEED = 42
 DEVICE = "hpu" if torch.hpu.is_available() else "cpu"
 
 
+def rank_zero_print(rank, to_print):
+    if rank == 0:
+        print(to_print)
+
+
 def setup_distributed(rank, world_size, device=DEVICE):
     """Setup distributed pg."""
     if dist.is_available() and not dist.is_initialized():
@@ -36,7 +41,7 @@ def get_log_dir_name(base_dir="runs", log_dir_suffix=None):
     ]
     run_ids = [int(d[len("run_") :]) for d in existing]
     next_id = max(run_ids, default=-1) + 1
-    base_name = "run" if log_dir_suffix is None else os.path.join("run", log_dir_suffix)
+    base_name = "run" if log_dir_suffix is None else f"run_{log_dir_suffix}"
     return os.path.join(
         base_dir, f"{base_name}_{next_id}", "tensorbaord"
     ), os.path.join(base_dir, f"{base_name}_{next_id}", "profile")
