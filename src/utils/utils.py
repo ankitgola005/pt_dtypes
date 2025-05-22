@@ -34,17 +34,17 @@ def destroy_distributed():
 def get_log_dir_name(base_dir="runs", log_dir_suffix=None):
     """Get a log dir name for current run. Avoid overwriting logs from previous runs."""
     os.makedirs(base_dir, exist_ok=True)
+    suffix = "" if log_dir_suffix is None else log_dir_suffix
+    base_name = f"run_{suffix}"
+
     existing = [
         d
         for d in os.listdir(base_dir)
-        if d.startswith("run_") and d[len("run_") :].isdigit()
+        if d.startswith(base_name) and d[len(base_name) :].lstrip("_").isdigit()
     ]
-    run_ids = [int(d[len("run_") :]) for d in existing]
+    run_ids = [int(d[len(base_name) :].lstrip("_")) for d in existing]
     next_id = max(run_ids, default=-1) + 1
-    base_name = "run" if log_dir_suffix is None else f"run_{log_dir_suffix}"
-    return os.path.join(
-        base_dir, f"{base_name}_{next_id}", "tensorbaord"
-    ), os.path.join(base_dir, f"{base_name}_{next_id}", "profile")
+    return os.path.join(base_dir, f"{base_name}_{next_id}")
 
 
 def get_amp_policy(

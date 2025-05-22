@@ -1,4 +1,4 @@
-from contextlib import nullcontext
+import os
 import torch
 from torch.utils.tensorboard import SummaryWriter
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -24,8 +24,7 @@ class Trainer:
         criterion=torch.nn.CrossEntropyLoss,
         optimizer=torch.optim.SGD,
         amp_policy_list=None,
-        base_logdir=".",
-        log_dir_suffix=None,
+        base_log_dir=".",
         print_freq=100,
     ):
         self.device = device
@@ -37,11 +36,8 @@ class Trainer:
         self.num_epochs = num_epochs
         self.amp_policy_list = amp_policy_list
         self.profiler = None
-        self.profiler_enabled = False
-        self.profiler_context = nullcontext()
-        self.logdir, self.profiler_dir = get_log_dir_name(
-            base_dir=base_logdir, log_dir_suffix=log_dir_suffix
-        )
+        self.logdir = os.path.join(base_log_dir, "tensorboard")
+        self.profiler_dir = os.path.join(base_log_dir, "profiler", f"rank_{rank}")
         self.writer = SummaryWriter(log_dir=self.logdir) if self.rank == 0 else None
         self.world_size = world_size
         self.print_freq = print_freq
@@ -54,11 +50,9 @@ class Trainer:
         schedule = (
             schedule
             if schedule is not None
-            else torch.profiler.schedule(
-                skip_first=20, wait=20, warmup=10, active=3, repeat=0
-            )
+            else torch.profiler.schedule(wait=1, warmup=5, active=1, repeat=1)
         )
-        self.profiler_context = torch.profiler.profile(
+        self.profiler = torch.profiler.profile(
             activities=[
                 torch.profiler.ProfilerActivity.CPU,
                 torch.profiler.ProfilerActivity.HPU,
@@ -91,18 +85,16 @@ class Trainer:
         total_loss = 0
         total_correct = 0
         total_samples = 0
+        for batch in dataloader:
+            loss, logits, targets = self.train_step(batch, amp_enabled)
+            if self.profiler:
+                self.profiler.step()
 
-        with self.profiler_context as prof:
-            for batch in dataloader:
-                loss, logits, targets = self.train_step(batch, amp_enabled)
-
-                with torch.no_grad():
-                    total_loss += loss * targets.size(0)
-                    total_samples += targets.size(0)
-                    if accuracy:
-                        total_correct += self.get_accuracy(logits, targets)
-                if self.profiler_enabled:
-                    prof.step()
+            with torch.no_grad():
+                total_loss += loss * targets.size(0)
+                total_samples += targets.size(0)
+                if accuracy:
+                    total_correct += self.get_accuracy(logits, targets)
 
         avg_loss = total_loss / total_samples
         if self.rank == 0:
@@ -124,14 +116,15 @@ class Trainer:
         rank_zero_print(self.rank, "Starting fit")
         for epoch in range(self.num_epochs):
             amp_enabled = self.amp_policy_list[epoch]
-            loss, acc = self.train_epoch(dataloader, epoch, accuracy, amp_enabled)
-            log = f"Epoch {epoch}: Loss = {loss:.6f}"
+            if self.profiler:
+                self.profiler.start()
+                loss, acc = self.train_epoch(dataloader, epoch, accuracy, amp_enabled)
+                self.profiler.stop()
+            log = f"Epoch {epoch+1}: Loss = {loss:.6f}"
             if accuracy:
                 log += f", Accuracy = {acc:.6f}%"
-            if epoch % self.print_freq == 0 or epoch == self.num_epochs:
+            if epoch + 1 % self.print_freq == 0 or epoch + 1 == self.num_epochs:
                 rank_zero_print(self.rank, log)
-            if epoch == 0:
-                self.profiler_enabled = False
 
         if self.world_size > 1:
             destroy_distributed()

@@ -2,7 +2,7 @@ import argparse
 import torch
 import torch.multiprocessing as mp
 from models.rand_model import RandModel, get_rand_dataloader
-from utils.utils import get_amp_policy, SEED
+from utils.utils import get_amp_policy, get_log_dir_name, SEED
 from utils.trainer import Trainer
 
 
@@ -34,14 +34,17 @@ def main(rank, world_size, num_epochs, amp_policy, amp_ratio, amp_policy_list):
     torch.manual_seed(SEED)
     model = RandModel()
     dataloader = get_rand_dataloader()
+    base_log_dir = get_log_dir_name(
+        base_dir="runs",
+        log_dir_suffix=f"epochs_{num_epochs}_policy_{amp_policy}_ratio_{amp_ratio}",
+    )
 
     trainer = Trainer(
         model,
         rank,
         world_size,
         amp_policy_list=amp_policy_list,
-        base_logdir="runs",
-        log_dir_suffix=f"epochs_{num_epochs}_policy_{amp_policy}_ratio_{amp_ratio}",
+        base_log_dir=base_log_dir,
         num_epochs=num_epochs,
         print_freq=1000,
     )
