@@ -123,8 +123,8 @@ class Trainer:
             log = f"Epoch {epoch+1}: Loss = {loss:.6f}"
             if accuracy:
                 log += f", Accuracy = {acc:.6f}%"
-            if epoch + 1 % self.print_freq == 0 or epoch + 1 == self.num_epochs:
-                rank_zero_print(self.rank, log)
+            # if epoch + 1 % self.print_freq == 0 or epoch + 1 == self.num_epochs:
+            #    rank_zero_print(self.rank, log)
 
         if self.world_size > 1:
             destroy_distributed()
