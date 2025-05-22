@@ -3,7 +3,7 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-from utils import DEVICE, get_log_dir_name, setup_distributed, destroy_distributed
+from utils.utils import DEVICE, get_log_dir_name, setup_distributed, destroy_distributed
 
 
 class Trainer:
@@ -12,12 +12,14 @@ class Trainer:
         model,
         rank,
         world_size,
+        num_epochs=1,
         lr=1e-3,
         device=DEVICE,
         criterion=torch.nn.CrossEntropyLoss,
         optimizer=torch.optim.SGD,
-        amp_policy=None,
+        amp_policy_list=None,
         base_logdir=".",
+        log_dir_suffix=None,
     ):
         self.device = device
         self.rank = rank
@@ -25,11 +27,14 @@ class Trainer:
         self.criterion = criterion(reduction="mean")
         self.optimizer = optimizer
         self.lr = lr
-        self.amp_policy = amp_policy
+        self.num_epochs = num_epochs
+        self.amp_policy_list = amp_policy_list
         self.profiler = None
         self.profiler_enabled = False
         self.profiler_context = nullcontext()
-        self.logdir, self.profiler_dir = get_log_dir_name(base_dir=base_logdir)
+        self.logdir, self.profiler_dir = get_log_dir_name(
+            base_dir=base_logdir, log_dir_suffix=log_dir_suffix
+        )
         self.writer = SummaryWriter(log_dir=self.logdir) if self.rank == 0 else None
         self.world_size = world_size
 
@@ -86,7 +91,8 @@ class Trainer:
                     total_samples += targets.size(0)
                     if accuracy:
                         total_correct += self.get_accuracy(logits, targets)
-                prof.step()
+                if self.profiler_enabled:
+                    prof.step()
 
         avg_loss = total_loss / total_samples
         if self.rank == 0:
@@ -99,15 +105,15 @@ class Trainer:
 
         return avg_loss, None
 
-    def fit(self, dataloader, epochs=10, accuracy=False):
+    def fit(self, dataloader, accuracy=False):
         if self.world_size > 1:
             setup_distributed(self.rank, self.world_size)
             self.model = DDP(self.model)
         self.optimizer = self.optimizer(self.model.parameters(), self.lr)
 
         print("starting fit")
-        for epoch in range(epochs):
-            amp_enabled = self.amp_policy[epoch]
+        for epoch in range(self.num_epochs):
+            amp_enabled = self.amp_policy_list[epoch]
             loss, acc = self.train_epoch(dataloader, epoch, accuracy, amp_enabled)
             log = f"Epoch {epoch+1}: Loss = {loss:.4f}"
             if accuracy:
